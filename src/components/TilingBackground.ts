@@ -7,7 +7,6 @@ export class TilingBackground {
 
   constructor(
     layerTextures: PIXI.Texture[],
-    width: number,
     height: number,
     scrollSpeeds: number[] = [0.1, 0.3, 0.5] // Parallax speeds for each layer
   ) {

@@ -25,6 +25,7 @@ export class AssetManager {
         name: 'forest_layers_3',
         path: 'backgrounds/forest/forest_layers_3.png',
       }, // Closest to camera
+      { name: 'tileset', path: 'levels/forest/oak_woods_tileset.png' },
       // Add more assets here as needed
     ];
 

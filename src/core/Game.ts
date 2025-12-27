@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { AssetManager } from './AssetManager';
 import { TilingBackground } from '../components/TilingBackground';
+import { TilemapLoader } from './TilemapLoader';
 
 export class Game {
   // Properties (data that belongs to this class)
@@ -14,6 +15,9 @@ export class Game {
 
   // Tiling background
   private tilingBackground?: TilingBackground;
+
+  // Tilemap
+  private tilemap?: TilemapLoader;
 
   constructor() {
     // Create the PixiJS application
@@ -47,6 +51,9 @@ export class Game {
     // Setup the tiling background
     this.setupBackground();
 
+    // Setup the tilemap
+    await this.setupTilemap();
+
     console.log('Game initialized!');
   }
 
@@ -62,7 +69,6 @@ export class Game {
     if (bgTextures.every((tex) => tex !== undefined)) {
       this.tilingBackground = new TilingBackground(
         bgTextures as PIXI.Texture[],
-        this.app.screen.width,
         this.app.screen.height,
         [0.2, 0.5, 0.8] // Scroll speeds for parallax effect
       );
@@ -71,6 +77,24 @@ export class Game {
       this.backgroundLayer.addChild(this.tilingBackground.getContainer());
     } else {
       console.warn('Some background textures failed to load');
+    }
+  }
+
+  // Setup the tilemap
+  private async setupTilemap(): Promise<void> {
+    const tilesetTexture = this.assetManager.getTexture('tileset');
+
+    if (tilesetTexture) {
+      this.tilemap = new TilemapLoader();
+      await this.tilemap.loadFromFile(
+        'levels/forest/forestLvl1.tmx',
+        tilesetTexture
+      );
+
+      // Add tilemap to main layer
+      this.mainLayer.addChild(this.tilemap.getContainer());
+    } else {
+      console.warn('Tileset texture not loaded');
     }
   }
 
@@ -134,5 +158,10 @@ export class Game {
   // Get the tiling background (useful for updating it based on player position)
   getTilingBackground(): TilingBackground | undefined {
     return this.tilingBackground;
+  }
+
+  // Get the tilemap (useful for collision detection)
+  getTilemap(): TilemapLoader | undefined {
+    return this.tilemap;
   }
 }
