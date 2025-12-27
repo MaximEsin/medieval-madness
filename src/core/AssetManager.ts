@@ -26,6 +26,7 @@ export class AssetManager {
         path: 'backgrounds/forest/forest_layers_3.png',
       }, // Closest to camera
       { name: 'tileset', path: 'levels/forest/oak_woods_tileset.png' },
+      { name: 'character', path: 'hero/Fire_Warrior-Sheet.png' },
       // Add more assets here as needed
     ];
 

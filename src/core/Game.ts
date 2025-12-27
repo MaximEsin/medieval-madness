@@ -2,6 +2,8 @@ import * as PIXI from 'pixi.js';
 import { AssetManager } from './AssetManager';
 import { TilingBackground } from '../components/TilingBackground';
 import { TilemapLoader } from './TilemapLoader';
+import { InputManager } from './InputManager';
+import { Character } from '../components/Character';
 
 export class Game {
   // Properties (data that belongs to this class)
@@ -19,10 +21,15 @@ export class Game {
   // Tilemap
   private tilemap?: TilemapLoader;
 
+  // Input and character
+  private inputManager: InputManager;
+  private character?: Character;
+
   constructor() {
     // Create the PixiJS application
     this.app = new PIXI.Application();
     this.assetManager = new AssetManager();
+    this.inputManager = new InputManager();
 
     // Create layers
     this.backgroundLayer = new PIXI.Container();
@@ -53,6 +60,8 @@ export class Game {
 
     // Setup the tilemap
     await this.setupTilemap();
+
+    this.setupCharacter();
 
     console.log('Game initialized!');
   }
@@ -98,6 +107,26 @@ export class Game {
     }
   }
 
+  // Setup the character
+  private setupCharacter(): void {
+    const characterTexture = this.assetManager.getTexture('character');
+
+    if (characterTexture) {
+      // Spawn character at position (100, 500)
+      this.character = new Character(
+        characterTexture,
+        this.inputManager,
+        100,
+        530
+      );
+
+      // Add character sprite to main layer
+      this.mainLayer.addChild(this.character.getSprite());
+    } else {
+      console.warn('Character texture not loaded');
+    }
+  }
+
   // Start the game loop
   start(): void {
     if (this.isRunning) return;
@@ -118,6 +147,9 @@ export class Game {
     // Background will be updated when player moves
     // We'll add that functionality when we create the player
     // You'll add more game logic here later
+    if (this.character) {
+      this.character.update(deltaTime);
+    }
   }
 
   // Stop the game loop
