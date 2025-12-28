@@ -79,7 +79,7 @@ export class Game {
       this.tilingBackground = new TilingBackground(
         bgTextures as PIXI.Texture[],
         this.app.screen.height,
-        [0.2, 0.5, 0.8] // Scroll speeds for parallax effect
+        [0.02, 0.05, 0.08] // Scroll speeds for parallax effect
       );
 
       // Add background to the background layer
@@ -143,14 +143,34 @@ export class Game {
     console.log('Game started!');
   }
 
-  // Update game logic (called every frame)
   private update(deltaTime: number): void {
-    // deltaTime is the time elapsed since last frame
-    // Background will be updated when player moves
-    // We'll add that functionality when we create the player
-    // You'll add more game logic here later
+    // Обновляем персонажа
     if (this.character) {
       this.character.update(deltaTime);
+    }
+
+    // КАМЕРА
+    if (this.character && this.tilemap) {
+      const screenWidth = this.app.screen.width;
+      const mapWidth = this.tilemap.getWidthInPixels();
+
+      // Позиция персонажа
+      const charX = this.character.getPosition().x;
+
+      // Камера хочет держать персонажа в центре
+      let cameraX = charX - screenWidth / 2;
+
+      // Ограничиваем камеру по краям карты
+      cameraX = Math.max(0, cameraX); // не уходим в минус слева
+      cameraX = Math.min(mapWidth - screenWidth, cameraX); // не уходим за карту справа
+
+      // Применяем к mainLayer (тайлы + персонаж)
+      this.mainLayer.position.x = -cameraX;
+
+      // Применяем к параллаксному фону
+      if (this.tilingBackground) {
+        this.tilingBackground.setScrollPosition(cameraX);
+      }
     }
   }
 

@@ -201,4 +201,16 @@ export class TilemapLoader {
   getTileSize() {
     return { w: this.tileWidth, h: this.tileHeight };
   }
+
+  getMapSize(): { width: number; height: number } {
+    return { width: this.mapWidth, height: this.mapHeight };
+  }
+
+  getWidthInPixels(): number {
+    return this.mapWidth * this.tileWidth;
+  }
+
+  getHeightInPixels(): number {
+    return this.mapHeight * this.tileHeight;
+  }
 }
