@@ -113,11 +113,13 @@ export class Game {
 
     if (characterTexture) {
       // Spawn character at position (100, 500)
+      if (!this.tilemap) throw new Error('No tilemap found');
       this.character = new Character(
         characterTexture,
         this.inputManager,
         100,
-        530
+        530,
+        this.tilemap
       );
 
       // Add character sprite to main layer

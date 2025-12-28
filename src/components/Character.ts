@@ -1,5 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { InputManager } from '../core/InputManager';
+import { TilemapLoader, type Body } from '../core/TilemapLoader';
 
 interface Animation {
   name: string;
@@ -8,17 +9,17 @@ interface Animation {
   speed: number; // frames per second
 }
 
+const VISUAL_Y_OFFSET = 17;
+
 export class Character {
   private sprite: PIXI.AnimatedSprite;
   private inputManager: InputManager;
   private animations: Map<string, PIXI.Texture[]> = new Map();
 
   // Character properties
-  private velocity: { x: number; y: number } = { x: 0, y: 0 };
-  private speed: number = 150; // Movement speed
-  private jumpForce: number = -400; // Jump strength (negative = up)
-  private gravity: number = 980; // Gravity force
-  private isOnGround: boolean = false;
+  private speed: number = 200; // Movement speed
+  private jumpForce: number = -700; // Jump strength (negative = up)
+  private gravity: number = 2500; // Gravity force
   private currentAnimation: string = 'idle';
   private facingRight: boolean = true;
 
@@ -26,13 +27,18 @@ export class Character {
   private readonly FRAME_WIDTH = 144;
   private readonly FRAME_HEIGHT = 80;
 
+  private body: Body;
+  private tilemap: TilemapLoader;
+
   constructor(
     spritesheet: PIXI.Texture,
     inputManager: InputManager,
     x: number,
-    y: number
+    y: number,
+    tilemap: TilemapLoader
   ) {
     this.inputManager = inputManager;
+    this.tilemap = tilemap;
 
     // Define animations we'll use (idle, walk, jump)
     const animationData: Animation[] = [
@@ -49,8 +55,18 @@ export class Character {
     this.sprite = new PIXI.AnimatedSprite(idleTextures);
     this.sprite.animationSpeed = 10 / 60; // Convert fps to PixiJS speed
     this.sprite.position.set(x, y);
-    this.sprite.anchor.set(0.5, 1); // Anchor at bottom center
+    this.sprite.anchor.set(0.4, 1); // Anchor at bottom center
     this.sprite.play();
+
+    this.body = {
+      x: x - 10,
+      y: y - 28,
+      width: 20,
+      height: 28,
+      vx: 0,
+      vy: 0,
+      onGround: false,
+    };
   }
 
   // Create animation textures from spritesheet
@@ -91,56 +107,50 @@ export class Character {
     this.sprite.play();
   }
 
-  // Update character (called every frame)
   update(deltaTime: number): void {
-    const dt = deltaTime / 60; // Normalize deltaTime
+    const dt = deltaTime / 60; // секунды
 
-    // Handle horizontal movement
-    this.velocity.x = 0;
+    // ===== INPUT =====
+    this.body.vx = 0;
 
     if (this.inputManager.isLeftPressed()) {
-      this.velocity.x = -this.speed;
+      this.body.vx = -this.speed;
       this.facingRight = false;
-    } else if (this.inputManager.isRightPressed()) {
-      this.velocity.x = this.speed;
+    }
+    if (this.inputManager.isRightPressed()) {
+      this.body.vx = this.speed;
       this.facingRight = true;
     }
-
-    // Apply gravity
-    if (!this.isOnGround) {
-      this.velocity.y += this.gravity * dt;
+    if (this.inputManager.isJumpPressed() && this.body.onGround) {
+      this.body.vy = this.jumpForce;
+      this.body.onGround = false;
     }
 
-    // Handle jumping
-    if (this.inputManager.isJumpPressed() && this.isOnGround) {
-      this.velocity.y = this.jumpForce;
-      this.isOnGround = false;
+    // ===== GRAVITY =====
+    if (!this.body.onGround) {
+      this.body.vy += this.gravity * dt;
     }
 
-    // Update position
-    this.sprite.position.x += this.velocity.x * dt;
-    this.sprite.position.y += this.velocity.y * dt;
+    // ===== COLLISION =====
+    this.tilemap.resolveCollision(this.body, dt);
 
-    // Simple ground collision (we'll improve this later)
-    const groundY = 530; // Temporary ground position
-    if (this.sprite.position.y >= groundY) {
-      this.sprite.position.y = groundY;
-      this.velocity.y = 0;
-      this.isOnGround = true;
-    }
+    // ===== APPLY TO SPRITE =====
+    this.sprite.position.set(
+      this.body.x + this.body.width / 2,
+      this.body.y + this.body.height + VISUAL_Y_OFFSET
+    );
 
-    // Update sprite direction
     this.sprite.scale.x = this.facingRight ? 1 : -1;
 
-    // Update animation based on state
+    // ===== ANIMATION =====
     this.updateAnimation();
   }
 
   // Update animation based on character state
   private updateAnimation(): void {
-    if (!this.isOnGround) {
+    if (!this.body.onGround) {
       this.playAnimation('jump', 10);
-    } else if (this.velocity.x !== 0) {
+    } else if (this.body.vx !== 0) {
       this.playAnimation('walk', 12);
     } else {
       this.playAnimation('idle', 10);
@@ -155,10 +165,5 @@ export class Character {
   // Get character position
   getPosition(): { x: number; y: number } {
     return { x: this.sprite.position.x, y: this.sprite.position.y };
-  }
-
-  // Set ground state (will be used for proper collision later)
-  setOnGround(onGround: boolean): void {
-    this.isOnGround = onGround;
   }
 }

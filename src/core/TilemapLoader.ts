@@ -1,127 +1,204 @@
 import * as PIXI from 'pixi.js';
 
-interface TileData {
-  gid: number; // Global tile ID
+export interface TileData {
+  gid: number;
   x: number;
   y: number;
+  solid: boolean;
+}
+
+export interface Body {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  vx: number;
+  vy: number;
+  onGround: boolean;
 }
 
 export class TilemapLoader {
-  private container: PIXI.Container;
-  private tileWidth: number = 32;
-  private tileHeight: number = 32;
-  private mapWidth: number = 0;
-  private mapHeight: number = 0;
+  private container = new PIXI.Container();
+
+  private tileWidth = 32;
+  private tileHeight = 32;
+
+  private mapWidth = 0;
+  private mapHeight = 0;
+
   private tiles: TileData[] = [];
+  private grid: (TileData | null)[][] = [];
 
-  constructor() {
-    this.container = new PIXI.Container();
-  }
+  /* ============================
+     LOAD TMX
+  ============================ */
 
-  // Load and parse TMX file
   async loadFromFile(
     tmxPath: string,
     tilesetTexture: PIXI.Texture
   ): Promise<void> {
-    try {
-      // Fetch the TMX file
-      const response = await fetch(tmxPath);
-      const tmxText = await response.text();
+    const response = await fetch(tmxPath);
+    const text = await response.text();
 
-      // Parse XML
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(tmxText, 'text/xml');
+    const xml = new DOMParser().parseFromString(text, 'text/xml');
+    const map = xml.getElementsByTagName('map')[0];
 
-      // Get map properties
-      const mapElement = xmlDoc.getElementsByTagName('map')[0];
-      this.mapWidth = parseInt(mapElement.getAttribute('width') || '0');
-      this.mapHeight = parseInt(mapElement.getAttribute('height') || '0');
-      this.tileWidth = parseInt(mapElement.getAttribute('tilewidth') || '32');
-      this.tileHeight = parseInt(mapElement.getAttribute('tileheight') || '32');
+    this.mapWidth = Number(map.getAttribute('width'));
+    this.mapHeight = Number(map.getAttribute('height'));
+    this.tileWidth = Number(map.getAttribute('tilewidth'));
+    this.tileHeight = Number(map.getAttribute('tileheight'));
 
-      // Get tile data
-      const layerElement = xmlDoc.getElementsByTagName('layer')[0];
-      const dataElement = layerElement.getElementsByTagName('data')[0];
-      const csvData = dataElement.textContent?.trim() || '';
+    this.grid = Array.from({ length: this.mapHeight }, () =>
+      Array(this.mapWidth).fill(null)
+    );
 
-      // Parse CSV data
-      this.parseCsvData(csvData);
+    const layer = xml.getElementsByTagName('layer')[0];
+    const data = layer.getElementsByTagName('data')[0];
+    const csv = data.textContent?.trim() ?? '';
 
-      // Render tiles
-      this.renderTiles(tilesetTexture);
-
-      console.log(`Tilemap loaded: ${this.mapWidth}x${this.mapHeight}`);
-    } catch (error) {
-      console.error('Failed to load tilemap:', error);
-    }
+    this.parseCsv(csv);
+    this.render(tilesetTexture);
   }
 
-  // Parse CSV tile data
-  private parseCsvData(csvData: string): void {
-    const rows = csvData.split('\n').filter((row) => row.trim() !== '');
+  /* ============================
+     PARSE
+  ============================ */
+
+  private parseCsv(csv: string): void {
+    const rows = csv.split('\n').filter(Boolean);
 
     rows.forEach((row, y) => {
-      const tiles = row.split(',').map((t) => parseInt(t.trim()));
+      row
+        .split(',')
+        .map(Number)
+        .forEach((gid, x) => {
+          if (gid > 0) {
+            const tile: TileData = {
+              gid,
+              x,
+              y,
+              solid: true,
+            };
 
-      tiles.forEach((gid, x) => {
-        if (gid > 0) {
-          // 0 means empty tile
-          this.tiles.push({ gid, x, y });
-        }
-      });
+            this.tiles.push(tile);
+            this.grid[y][x] = tile;
+          }
+        });
     });
   }
 
-  // Render tiles as sprites
-  private renderTiles(tilesetTexture: PIXI.Texture): void {
-    // Calculate how many tiles fit in the tileset texture horizontally
-    const tilesPerRow = Math.floor(tilesetTexture.width / this.tileWidth);
+  /* ============================
+     RENDER
+  ============================ */
+
+  private render(tileset: PIXI.Texture): void {
+    const tilesPerRow = Math.floor(tileset.width / this.tileWidth);
 
     this.tiles.forEach((tile) => {
-      // Convert GID to tileset coordinates
-      const tileIndex = tile.gid - 1; // GID starts at 1, index starts at 0
-      const tileX = (tileIndex % tilesPerRow) * this.tileWidth;
-      const tileY = Math.floor(tileIndex / tilesPerRow) * this.tileHeight;
+      const index = tile.gid - 1;
+      const tx = (index % tilesPerRow) * this.tileWidth;
+      const ty = Math.floor(index / tilesPerRow) * this.tileHeight;
 
-      // Create texture for this specific tile
-      const tileTexture = new PIXI.Texture({
-        source: tilesetTexture.source,
-        frame: new PIXI.Rectangle(
-          tileX,
-          tileY,
-          this.tileWidth,
-          this.tileHeight
-        ),
+      const texture = new PIXI.Texture({
+        source: tileset.source,
+        frame: new PIXI.Rectangle(tx, ty, this.tileWidth, this.tileHeight),
       });
 
-      // Create sprite
-      const sprite = new PIXI.Sprite(tileTexture);
+      const sprite = new PIXI.Sprite(texture);
       sprite.position.set(tile.x * this.tileWidth, tile.y * this.tileHeight);
 
       this.container.addChild(sprite);
     });
   }
 
-  // Get the container with all tiles
+  /* ============================
+     COLLISION API
+  ============================ */
+
+  hasSolidTileAtTile(x: number, y: number): boolean {
+    return !!this.grid[y]?.[x]?.solid;
+  }
+
+  hasSolidTileAtWorld(x: number, y: number): boolean {
+    const tx = Math.floor(x / this.tileWidth);
+    const ty = Math.floor(y / this.tileHeight);
+    return this.hasSolidTileAtTile(tx, ty);
+  }
+
+  resolveCollision(body: Body, dt: number): void {
+    // --- Vertical movement ---
+    body.y += body.vy * dt;
+
+    if (body.vy > 0) {
+      // falling
+      const bottom = body.y + body.height;
+      if (
+        this.hasSolidTileAtWorld(body.x + 1, bottom) ||
+        this.hasSolidTileAtWorld(body.x + body.width - 1, bottom)
+      ) {
+        // Snap to top of tile
+        body.y =
+          Math.floor(bottom / this.tileHeight) * this.tileHeight - body.height;
+        body.vy = 0;
+        body.onGround = true;
+      } else {
+        body.onGround = false;
+      }
+    }
+
+    if (body.vy < 0) {
+      // jumping
+      if (
+        this.hasSolidTileAtWorld(body.x + 1, body.y) ||
+        this.hasSolidTileAtWorld(body.x + body.width - 1, body.y)
+      ) {
+        body.y =
+          Math.floor((body.y + this.tileHeight) / this.tileHeight) *
+          this.tileHeight;
+        body.vy = 0;
+      }
+    }
+
+    // --- Horizontal movement ---
+    body.x += body.vx * dt;
+
+    if (body.vx > 0) {
+      const right = body.x + body.width;
+      if (
+        this.hasSolidTileAtWorld(right, body.y + 1) ||
+        this.hasSolidTileAtWorld(right, body.y + body.height - 1)
+      ) {
+        body.x =
+          Math.floor(right / this.tileWidth) * this.tileWidth - body.width;
+        body.vx = 0;
+      }
+    }
+    if (body.vx < 0) {
+      if (
+        this.hasSolidTileAtWorld(body.x, body.y + 1) ||
+        this.hasSolidTileAtWorld(body.x, body.y + body.height - 1)
+      ) {
+        body.x = Math.floor(body.x / this.tileWidth + 1) * this.tileWidth;
+        body.vx = 0;
+      }
+    }
+
+    // --- FINAL STANDING CHECK ---
+    const footY = body.y + body.height + 1;
+    body.onGround =
+      this.hasSolidTileAtWorld(body.x + 1, footY) ||
+      this.hasSolidTileAtWorld(body.x + body.width - 1, footY);
+  }
+
+  /* ============================
+     GETTERS
+  ============================ */
+
   getContainer(): PIXI.Container {
     return this.container;
   }
 
-  // Get tile data for collision detection
-  getTiles(): TileData[] {
-    return this.tiles;
-  }
-
-  // Get map dimensions in pixels
-  getMapSize(): { width: number; height: number } {
-    return {
-      width: this.mapWidth * this.tileWidth,
-      height: this.mapHeight * this.tileHeight,
-    };
-  }
-
-  // Check if a position has a tile (useful for collision)
-  hasTileAt(x: number, y: number): boolean {
-    return this.tiles.some((tile) => tile.x === x && tile.y === y);
+  getTileSize() {
+    return { w: this.tileWidth, h: this.tileHeight };
   }
 }
