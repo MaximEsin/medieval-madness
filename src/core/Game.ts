@@ -33,6 +33,11 @@ export class Game {
   private messageTimer: number = 0;
   private messageDuration: number = 200;
 
+  private deathText?: PIXI.Text;
+  private deathTimer: number = 0;
+  private deathDuration: number = 100;
+  private isDead: boolean = false;
+
   constructor() {
     // Create the PixiJS application
     this.app = new PIXI.Application();
@@ -175,7 +180,7 @@ export class Game {
     }
 
     // КАМЕРА
-    if (this.character && this.tilemap) {
+    if (this.character && this.tilemap && !this.isDead) {
       const screenWidth = this.app.screen.width;
       const mapWidth = this.tilemap.getWidthInPixels();
 
@@ -201,12 +206,45 @@ export class Game {
         this.showMessage('Level Complete!');
       }
 
+      // Если герой провалился ниже уровня
+      const mapHeightInPixels = this.tilemap?.getHeightInPixels() ?? 1000;
+      if (this.character.getBody().y > mapHeightInPixels + 100) {
+        this.gameOver();
+      }
+
       if (this.levelText && this.messageTimer > 0) {
         this.messageTimer -= deltaTime;
         if (this.messageTimer <= 0) {
           this.levelText.visible = false;
         }
       }
+    }
+
+    if (this.isDead) {
+      this.deathTimer -= deltaTime;
+      if (this.deathTimer <= 0) {
+        this.restartLevel();
+      }
+    }
+  }
+
+  private restartLevel(): void {
+    this.isDead = false;
+
+    // Скрываем сообщение
+    if (this.deathText) this.deathText.visible = false;
+
+    // Удаляем старого персонажа
+    if (this.character) {
+      this.mainLayer.removeChild(this.character.getSprite());
+    }
+
+    // Создаём нового персонажа
+    this.setupCharacter();
+
+    // Сбрасываем фон и камеру
+    if (this.tilingBackground) {
+      this.tilingBackground.setScrollPosition(0);
     }
   }
 
@@ -227,6 +265,33 @@ export class Game {
       this.levelText.visible = true;
     }
     this.messageTimer = this.messageDuration;
+  }
+
+  private gameOver(): void {
+    if (this.isDead) return; // Чтобы не спамить
+    this.isDead = true;
+
+    // Создаём текст
+    if (!this.deathText) {
+      this.deathText = new PIXI.Text('You Died', {
+        fontFamily: 'main',
+        fontSize: 72,
+        fill: 0xff0000,
+        align: 'center',
+        stroke: 0x000000,
+      });
+      this.deathText.anchor.set(0.5, 0.5);
+      this.deathText.position.set(
+        this.app.screen.width / 2,
+        this.app.screen.height / 2
+      );
+      this.app.stage.addChild(this.deathText);
+    } else {
+      this.deathText.visible = true;
+    }
+
+    // Таймер перед перезапуском
+    this.deathTimer = this.deathDuration;
   }
 
   // Stop the game loop
