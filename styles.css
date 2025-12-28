@@ -5,3 +5,10 @@ body {
   overflow: hidden;
   background-color: rgba(48, 67, 102, 255);
 }
+
+@font-face {
+  font-family: 'main';
+  src: url('./public/ThaleahFat.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}

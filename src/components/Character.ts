@@ -166,4 +166,8 @@ export class Character {
   getPosition(): { x: number; y: number } {
     return { x: this.sprite.position.x, y: this.sprite.position.y };
   }
+
+  getBody(): Body {
+    return this.body;
+  }
 }

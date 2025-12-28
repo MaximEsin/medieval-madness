@@ -4,6 +4,7 @@ import { TilingBackground } from '../components/TilingBackground';
 import { TilemapLoader } from './TilemapLoader';
 import { InputManager } from './InputManager';
 import { Character } from '../components/Character';
+import { LevelTrigger } from '../components/LevelTrigger';
 
 export class Game {
   // Properties (data that belongs to this class)
@@ -24,6 +25,13 @@ export class Game {
   // Input and character
   private inputManager: InputManager;
   private character?: Character;
+
+  private levelStart?: LevelTrigger;
+  private levelEnd?: LevelTrigger;
+
+  private levelText?: PIXI.Text;
+  private messageTimer: number = 0;
+  private messageDuration: number = 200;
 
   constructor() {
     // Create the PixiJS application
@@ -105,6 +113,23 @@ export class Game {
     } else {
       console.warn('Tileset texture not loaded');
     }
+
+    const endTexture = this.assetManager.getTexture('levelTrigger1');
+
+    if (!endTexture) throw new Error('No end texture found');
+    if (!this.tilemap) throw new Error('No tilemap found');
+
+    this.levelStart = new LevelTrigger(endTexture, 50, 480, 32, 32);
+    this.levelEnd = new LevelTrigger(
+      endTexture,
+      this.tilemap.getWidthInPixels() - 50,
+      480,
+      32,
+      32
+    );
+
+    this.mainLayer.addChild(this.levelStart.sprite);
+    this.mainLayer.addChild(this.levelEnd.sprite);
   }
 
   // Setup the character
@@ -171,7 +196,37 @@ export class Game {
       if (this.tilingBackground) {
         this.tilingBackground.setScrollPosition(cameraX);
       }
+
+      if (this.levelEnd?.checkCollision(this.character.getBody())) {
+        this.showMessage('Level Complete!');
+      }
+
+      if (this.levelText && this.messageTimer > 0) {
+        this.messageTimer -= deltaTime;
+        if (this.messageTimer <= 0) {
+          this.levelText.visible = false;
+        }
+      }
     }
+  }
+
+  private showMessage(text: string): void {
+    if (!this.levelText) {
+      this.levelText = new PIXI.Text(text, {
+        fontFamily: 'main',
+        fontSize: 48,
+        fill: 0xffffff,
+        align: 'center',
+        stroke: 0x000000,
+      });
+      this.levelText.anchor.set(0.5, 0);
+      this.levelText.position.set(this.app.screen.width / 2, 20);
+      this.app.stage.addChild(this.levelText);
+    } else {
+      this.levelText.text = text;
+      this.levelText.visible = true;
+    }
+    this.messageTimer = this.messageDuration;
   }
 
   // Stop the game loop
