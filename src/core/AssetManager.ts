@@ -1,4 +1,7 @@
 import * as PIXI from 'pixi.js';
+import { core } from '../data/core';
+import { forest } from '../data/forest';
+import type { Asset } from '../types';
 
 export class AssetManager {
   // Store loaded assets here
@@ -7,29 +10,16 @@ export class AssetManager {
   constructor() {}
 
   // Load all game assets
-  async loadAssets(): Promise<void> {
+  async loadAssets(level: number): Promise<void> {
     console.log('Loading assets...');
 
-    // Define your background layers
-    // Replace these paths with your actual image paths
-    const assetsToLoad = [
-      {
-        name: 'forest_layers_1',
-        path: 'backgrounds/forest/forest_layers_1.png',
-      }, // Furthest back
-      {
-        name: 'forest_layers_2',
-        path: 'backgrounds/forest/forest_layers_2.png',
-      }, // Middle
-      {
-        name: 'forest_layers_3',
-        path: 'backgrounds/forest/forest_layers_3.png',
-      }, // Closest to camera
-      { name: 'tileset', path: 'levels/forest/oak_woods_tileset.png' },
-      { name: 'character', path: 'hero/Fire_Warrior-Sheet.png' },
-      { name: 'levelTrigger1', path: 'levels/sign.png' },
-      // Add more assets here as needed
-    ];
+    let levelAssets: Asset[] = [];
+
+    if (level === 1) {
+      levelAssets = forest;
+    }
+
+    const assetsToLoad = [...core, ...levelAssets];
 
     // Load each asset
     for (const asset of assetsToLoad) {

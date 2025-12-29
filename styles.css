@@ -8,7 +8,7 @@ body {
 
 @font-face {
   font-family: 'main';
-  src: url('./public/ThaleahFat.ttf') format('truetype');
+  src: url('./ThaleahFat.ttf');
   font-weight: normal;
   font-style: normal;
 }

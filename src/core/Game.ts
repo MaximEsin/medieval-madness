@@ -38,6 +38,9 @@ export class Game {
   private deathDuration: number = 100;
   private isDead: boolean = false;
 
+  private currentLevel: number = 1;
+  private isLevelTransition: boolean = false;
+
   constructor() {
     // Create the PixiJS application
     this.app = new PIXI.Application();
@@ -66,13 +69,13 @@ export class Game {
     this.app.stage.addChild(this.mainLayer);
 
     // Load all game assets
-    await this.assetManager.loadAssets();
+    await this.assetManager.loadAssets(1);
 
     // Setup the tiling background
     this.setupBackground();
 
     // Setup the tilemap
-    await this.setupTilemap();
+    await this.setupTilemap(1);
 
     this.setupCharacter();
 
@@ -103,13 +106,19 @@ export class Game {
   }
 
   // Setup the tilemap
-  private async setupTilemap(): Promise<void> {
-    const tilesetTexture = this.assetManager.getTexture('tileset');
+  private async setupTilemap(level: number): Promise<void> {
+    let tileset: string = 'tileset1';
+
+    if (level === 1) {
+      tileset = 'tileset1';
+    }
+
+    const tilesetTexture = this.assetManager.getTexture(tileset);
 
     if (tilesetTexture) {
       this.tilemap = new TilemapLoader();
       await this.tilemap.loadFromFile(
-        'levels/forest/forestLvl1.tmx',
+        `levels/forest/forestLvl${level}.tmx`,
         tilesetTexture
       );
 
@@ -202,8 +211,13 @@ export class Game {
         this.tilingBackground.setScrollPosition(cameraX);
       }
 
-      if (this.levelEnd?.checkCollision(this.character.getBody())) {
-        this.showMessage('Level Complete!');
+      if (
+        this.levelEnd &&
+        this.character &&
+        this.levelEnd.checkCollision(this.character.getBody()) &&
+        !this.isLevelTransition
+      ) {
+        this.completeLevel();
       }
 
       // Если герой провалился ниже уровня
@@ -226,6 +240,58 @@ export class Game {
         this.restartLevel();
       }
     }
+
+    if (this.isLevelTransition && this.messageTimer <= 0) {
+      this.loadNextLevel();
+    }
+  }
+
+  private async loadNextLevel(): Promise<void> {
+    this.isLevelTransition = false;
+    this.currentLevel++;
+
+    // 1. Удаляем старые объекты
+    if (this.character) {
+      this.mainLayer.removeChild(this.character.getSprite());
+      this.character = undefined;
+    }
+
+    if (this.tilemap) {
+      this.mainLayer.removeChild(this.tilemap.getContainer());
+      this.tilemap = undefined;
+    }
+
+    if (this.levelStart) {
+      this.mainLayer.removeChild(this.levelStart.sprite);
+      this.levelStart = undefined;
+    }
+
+    if (this.levelEnd) {
+      this.mainLayer.removeChild(this.levelEnd.sprite);
+      this.levelEnd = undefined;
+    }
+
+    // 2. Загружаем новый уровень
+    await this.setupTilemap(this.currentLevel);
+
+    // 3. Создаём нового персонажа на старте
+    this.setupCharacter();
+
+    // 4. Сброс камеры
+    this.mainLayer.position.x = 0;
+
+    if (this.tilingBackground) {
+      this.tilingBackground.setScrollPosition(0);
+    }
+
+    // 5. Показываем название уровня
+    this.showMessage(`Level ${this.currentLevel}`);
+  }
+
+  private completeLevel(): void {
+    this.isLevelTransition = true;
+
+    this.showMessage('Level Complete!');
   }
 
   private restartLevel(): void {
