@@ -15,4 +15,7 @@ export const forest: Asset[] = [
   },
   { name: 'tileset1', path: 'levels/forest/oak_woods_tileset.png' },
   { name: 'levelTrigger1', path: 'levels/sign.png' },
+  { name: 'kobold_idle', path: 'enemies/kobold/IDLE.png' },
+  { name: 'kobold_run', path: 'enemies/kobold/RUN.png' },
+  { name: 'kobold_attack', path: 'enemies/kobold/ATTACK.png' },
 ];

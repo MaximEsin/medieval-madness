@@ -5,6 +5,9 @@ import { TilemapLoader } from './TilemapLoader';
 import { InputManager } from './InputManager';
 import { Character } from '../components/Character';
 import { LevelTrigger } from '../components/LevelTrigger';
+import { HealthUI } from '../ui/HealthUi';
+import { GroundEnemy } from '../components/enemies/GroundEnemy';
+import { aabb } from '../helpers/helpers';
 
 export class Game {
   // Properties (data that belongs to this class)
@@ -15,6 +18,7 @@ export class Game {
   // Game layers for organizing sprites
   private backgroundLayer: PIXI.Container;
   private mainLayer: PIXI.Container;
+  private uiLayer: PIXI.Container;
 
   // Tiling background
   private tilingBackground?: TilingBackground;
@@ -41,6 +45,10 @@ export class Game {
   private currentLevel: number = 1;
   private isLevelTransition: boolean = false;
 
+  private healthUI?: HealthUI;
+
+  private enemies: GroundEnemy[] = [];
+
   constructor() {
     // Create the PixiJS application
     this.app = new PIXI.Application();
@@ -50,6 +58,7 @@ export class Game {
     // Create layers
     this.backgroundLayer = new PIXI.Container();
     this.mainLayer = new PIXI.Container();
+    this.uiLayer = new PIXI.Container();
   }
 
   // Initialize the game
@@ -67,6 +76,7 @@ export class Game {
     // Add layers to the stage in order (background first, then main)
     this.app.stage.addChild(this.backgroundLayer);
     this.app.stage.addChild(this.mainLayer);
+    this.app.stage.addChild(this.uiLayer);
 
     // Load all game assets
     await this.assetManager.loadAssets(1);
@@ -78,6 +88,8 @@ export class Game {
     await this.setupTilemap(1);
 
     this.setupCharacter();
+
+    this.setupEnemies();
 
     console.log('Game initialized!');
   }
@@ -166,6 +178,42 @@ export class Game {
     } else {
       console.warn('Character texture not loaded');
     }
+
+    const uiTileset = this.assetManager.getTexture('ui');
+    const portrait = this.assetManager.getTexture('portrait');
+
+    if (!portrait) throw new Error('No portrait found');
+
+    if (!uiTileset) throw new Error('No UI tileset');
+
+    this.healthUI = new HealthUI(uiTileset, portrait);
+    this.uiLayer.addChild(this.healthUI.getContainer());
+  }
+
+  private setupEnemies(): void {
+    if (!this.tilemap) return;
+
+    const enemyTextureIdle = this.assetManager.getTexture('kobold_idle');
+    const enemyTextureWalk = this.assetManager.getTexture('kobold_run');
+    const enemyTextureAttack = this.assetManager.getTexture('kobold_attack');
+
+    if (!enemyTextureIdle || !enemyTextureWalk || !enemyTextureAttack) return;
+    const enemy = new GroundEnemy(
+      [
+        { name: 'idle', texture: enemyTextureIdle, frames: 4, fps: 6 },
+        { name: 'walk', texture: enemyTextureWalk, frames: 6, fps: 8 },
+        { name: 'attack', texture: enemyTextureAttack, frames: 5, fps: 12 },
+      ],
+      200, // позиция на стартовой платформе
+      400,
+      this.tilemap
+    );
+
+    this.enemies.push(enemy);
+
+    this.enemies.forEach((enemy) => {
+      this.mainLayer.addChild(enemy.getSprite());
+    });
   }
 
   // Start the game loop
@@ -186,6 +234,22 @@ export class Game {
     // Обновляем персонажа
     if (this.character) {
       this.character.update(deltaTime);
+
+      const body = this.character.getBody();
+      if (!this.tilemap) throw new Error('No tilemap found');
+      const levelWidthPx =
+        this.tilemap.getWidthInPixels() * this.tilemap.getTileSize().w;
+
+      // Левая граница
+      if (body.x < 0) body.x = 0;
+
+      // Правая граница
+      if (body.x + body.width > levelWidthPx) {
+        body.x = levelWidthPx - body.width;
+      }
+
+      // Верх (если прыжки высокие)
+      if (body.y < 0) body.y = 0;
     }
 
     // КАМЕРА
@@ -209,6 +273,12 @@ export class Game {
       // Применяем к параллаксному фону
       if (this.tilingBackground) {
         this.tilingBackground.setScrollPosition(cameraX);
+      }
+
+      this.updateEnemies(deltaTime);
+
+      if (this.character && this.healthUI) {
+        this.healthUI?.setHP(this.character.getHealth());
       }
 
       if (
@@ -237,13 +307,48 @@ export class Game {
     if (this.isDead) {
       this.deathTimer -= deltaTime;
       if (this.deathTimer <= 0) {
+        this.character?.die();
         this.restartLevel();
       }
+    }
+
+    if (this.character && this.character.isDead()) {
+      this.character?.die();
+      this.gameOver();
     }
 
     if (this.isLevelTransition && this.messageTimer <= 0) {
       this.loadNextLevel();
     }
+  }
+
+  private updateEnemies(deltaTime: number): void {
+    if (!this.character) return;
+
+    this.enemies = this.enemies.filter((enemy) => {
+      enemy.update(deltaTime / 60, this.character!);
+
+      if (!this.character) throw new Error('No character found');
+
+      const heroBody = this.character.getBody();
+      const enemyBody = enemy.getBody();
+
+      if (aabb(heroBody, enemyBody)) {
+        // простой push-back
+        if (heroBody.x < enemyBody.x) {
+          heroBody.x = enemyBody.x - heroBody.width;
+        } else {
+          heroBody.x = enemyBody.x + enemyBody.width;
+        }
+      }
+
+      if (enemy.isDead()) {
+        this.mainLayer.removeChild(enemy.getSprite());
+        return false;
+      }
+
+      return true;
+    });
   }
 
   private async loadNextLevel(): Promise<void> {
@@ -300,6 +405,8 @@ export class Game {
     // Скрываем сообщение
     if (this.deathText) this.deathText.visible = false;
 
+    this.clearEnemies();
+
     // Удаляем старого персонажа
     if (this.character) {
       this.mainLayer.removeChild(this.character.getSprite());
@@ -307,6 +414,8 @@ export class Game {
 
     // Создаём нового персонажа
     this.setupCharacter();
+
+    this.setupEnemies();
 
     // Сбрасываем фон и камеру
     if (this.tilingBackground) {
@@ -364,6 +473,13 @@ export class Game {
   stop(): void {
     this.isRunning = false;
     this.app.ticker.stop();
+  }
+
+  private clearEnemies(): void {
+    this.enemies.forEach((enemy) => {
+      this.mainLayer.removeChild(enemy.getSprite());
+    });
+    this.enemies = [];
   }
 
   // Get the PixiJS stage (where you'll add sprites)

@@ -30,6 +30,23 @@ export class Character {
   private body: Body;
   private tilemap: TilemapLoader;
 
+  private maxHealth: number = 2; // 2 половинки = 1 сердце
+  private health: number = 2;
+
+  private isAttacking: boolean = false;
+  private attackCooldown = 0;
+  private readonly ATTACK_DURATION = 0.25;
+
+  private invulnerable = false;
+  private invulnerableTimer = 0;
+  private readonly INVULNERABLE_TIME = 0.6;
+
+  private isDamaged = false;
+  private damageTimer = 0;
+  private readonly DAMAGE_ANIM_TIME = 20;
+
+  private dead = false;
+
   constructor(
     spritesheet: PIXI.Texture,
     inputManager: InputManager,
@@ -45,6 +62,11 @@ export class Character {
       { name: 'idle', row: 0, frames: 8, speed: 10 },
       { name: 'walk', row: 1, frames: 8, speed: 12 },
       { name: 'jump', row: 8, frames: 3, speed: 10 },
+      { name: 'dash', row: 3, frames: 7, speed: 15 },
+      { name: 'slide', row: 4, frames: 7, speed: 15 },
+      { name: 'attack', row: 9, frames: 5, speed: 15 },
+      { name: 'damaged', row: 23, frames: 5, speed: 15 },
+      { name: 'death', row: 24, frames: 12, speed: 15 },
     ];
 
     // Create textures for each animation
@@ -95,9 +117,12 @@ export class Character {
   }
 
   // Play a specific animation
-  private playAnimation(name: string, speed: number = 10): void {
+  private playAnimation(
+    name: string,
+    speed: number = 10,
+    loop: boolean = true
+  ): void {
     if (this.currentAnimation === name) return;
-
     const textures = this.animations.get(name);
     if (!textures) return;
 
@@ -105,6 +130,7 @@ export class Character {
     this.sprite.textures = textures;
     this.sprite.animationSpeed = speed / 60;
     this.sprite.play();
+    this.sprite.loop = loop;
   }
 
   update(deltaTime: number): void {
@@ -113,15 +139,23 @@ export class Character {
     // ===== INPUT =====
     this.body.vx = 0;
 
-    if (this.inputManager.isLeftPressed()) {
+    if (
+      this.inputManager.isAttackPressed() &&
+      !this.isAttacking &&
+      !this.dead
+    ) {
+      this.startAttack();
+    }
+
+    if (this.inputManager.isLeftPressed() && !this.isAttacking && !this.dead) {
       this.body.vx = -this.speed;
       this.facingRight = false;
     }
-    if (this.inputManager.isRightPressed()) {
+    if (this.inputManager.isRightPressed() && !this.isAttacking && !this.dead) {
       this.body.vx = this.speed;
       this.facingRight = true;
     }
-    if (this.inputManager.isJumpPressed() && this.body.onGround) {
+    if (this.inputManager.isJumpPressed() && this.body.onGround && !this.dead) {
       this.body.vy = this.jumpForce;
       this.body.onGround = false;
     }
@@ -144,10 +178,33 @@ export class Character {
 
     // ===== ANIMATION =====
     this.updateAnimation();
+
+    if (this.isAttacking) {
+      this.attackCooldown -= dt;
+
+      if (this.attackCooldown <= 0) {
+        this.isAttacking = false;
+      }
+    }
+
+    if (this.invulnerable) {
+      this.invulnerableTimer -= deltaTime / 60;
+      if (this.invulnerableTimer <= 0) {
+        this.invulnerable = false;
+      }
+    }
+
+    if (this.isDamaged) {
+      this.damageTimer -= deltaTime;
+      if (this.damageTimer <= 0) {
+        this.isDamaged = false;
+      }
+    }
   }
 
   // Update animation based on character state
   private updateAnimation(): void {
+    if (this.isAttacking || this.isDamaged || this.dead) return;
     if (!this.body.onGround) {
       this.playAnimation('jump', 10);
     } else if (this.body.vx !== 0) {
@@ -155,6 +212,64 @@ export class Character {
     } else {
       this.playAnimation('idle', 10);
     }
+  }
+
+  private startAttack(): void {
+    this.isAttacking = true;
+    this.attackCooldown = this.ATTACK_DURATION;
+
+    this.body.vx = 0; // стопаем движение
+    this.playAnimation('attack', 15);
+  }
+
+  getAttackBox(): Body | null {
+    if (!this.isAttacking) return null;
+
+    const body = this.body;
+    const range = 30; // дальность удара
+    const height = body.height - 6;
+
+    return {
+      x: this.facingRight ? body.x + body.width : body.x - range,
+      y: body.y + 3,
+      width: range,
+      height: height,
+      vx: 0,
+      vy: 0,
+      onGround: false,
+    };
+  }
+
+  takeDamage(amount: number = 1): void {
+    if (this.invulnerable) return;
+
+    this.health = Math.max(0, this.health - amount);
+    this.invulnerable = true;
+    this.invulnerableTimer = this.INVULNERABLE_TIME;
+
+    this.isDamaged = true;
+    this.damageTimer = this.DAMAGE_ANIM_TIME;
+
+    this.playAnimation('damaged');
+  }
+
+  die(): void {
+    if (this.dead) return;
+
+    this.dead = true;
+    this.playAnimation('death', 8, false);
+  }
+
+  heal(amount: number = 1): void {
+    this.health = Math.min(this.maxHealth, this.health + amount);
+  }
+
+  getHealth(): number {
+    return this.health;
+  }
+
+  getMaxHealth(): number {
+    return this.maxHealth;
   }
 
   // Get the sprite to add to the scene
@@ -169,5 +284,13 @@ export class Character {
 
   getBody(): Body {
     return this.body;
+  }
+
+  getHeroIsAttacking(): boolean {
+    return this.isAttacking;
+  }
+
+  isDead(): boolean {
+    return this.health <= 0;
   }
 }

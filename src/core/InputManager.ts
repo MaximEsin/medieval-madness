@@ -21,7 +21,10 @@ export class InputManager {
     return this.keys.get(keyCode) || false;
   }
 
-  // Helper methods for common controls
+  isAttackPressed(): boolean {
+    return this.isKeyPressed('KeyH');
+  }
+
   isLeftPressed(): boolean {
     return this.isKeyPressed('KeyA') || this.isKeyPressed('ArrowLeft');
   }
