@@ -14,6 +14,7 @@ export class Game {
   private app: PIXI.Application;
   private assetManager: AssetManager;
   private isRunning: boolean = false;
+  private isPaused: boolean = false;
 
   // Game layers for organizing sprites
   private backgroundLayer: PIXI.Container;
@@ -91,6 +92,9 @@ export class Game {
 
     this.setupEnemies();
 
+    // Setup pause listener
+    this.setupPauseListener();
+
     console.log('Game initialized!');
   }
 
@@ -107,7 +111,7 @@ export class Game {
       this.tilingBackground = new TilingBackground(
         bgTextures as PIXI.Texture[],
         this.app.screen.height,
-        [0.02, 0.05, 0.08] // Scroll speeds for parallax effect
+        [0.02, 0.05, 0.08], // Scroll speeds for parallax effect
       );
 
       // Add background to the background layer
@@ -131,7 +135,7 @@ export class Game {
       this.tilemap = new TilemapLoader();
       await this.tilemap.loadFromFile(
         `levels/forest/forestLvl${level}.tmx`,
-        tilesetTexture
+        tilesetTexture,
       );
 
       // Add tilemap to main layer
@@ -151,7 +155,7 @@ export class Game {
       this.tilemap.getWidthInPixels() - 50,
       480,
       32,
-      32
+      32,
     );
 
     this.mainLayer.addChild(this.levelStart.sprite);
@@ -170,7 +174,7 @@ export class Game {
         this.inputManager,
         100,
         530,
-        this.tilemap
+        this.tilemap,
       );
 
       // Add character sprite to main layer
@@ -206,7 +210,7 @@ export class Game {
       ],
       200, // позиция на стартовой платформе
       400,
-      this.tilemap
+      this.tilemap,
     );
 
     this.enemies.push(enemy);
@@ -228,6 +232,21 @@ export class Game {
     });
 
     console.log('Game started!');
+  }
+
+  // Setup pause listener
+  private setupPauseListener(): void {
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape') {
+        this.isPaused = !this.isPaused;
+
+        if (this.isPaused) {
+          this.app.ticker.stop();
+        } else {
+          this.app.ticker.start();
+        }
+      }
+    });
   }
 
   private update(deltaTime: number): void {
@@ -458,7 +477,7 @@ export class Game {
       this.deathText.anchor.set(0.5, 0.5);
       this.deathText.position.set(
         this.app.screen.width / 2,
-        this.app.screen.height / 2
+        this.app.screen.height / 2,
       );
       this.app.stage.addChild(this.deathText);
     } else {
