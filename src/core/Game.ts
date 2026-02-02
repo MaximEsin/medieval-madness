@@ -7,6 +7,7 @@ import { Character } from '../components/Character';
 import { LevelTrigger } from '../components/LevelTrigger';
 import { HealthUI } from '../ui/HealthUi';
 import { GroundEnemy } from '../components/enemies/GroundEnemy';
+import { BloodEffect } from '../components/BloodEffect';
 import { aabb } from '../helpers/helpers';
 
 export class Game {
@@ -49,6 +50,7 @@ export class Game {
   private healthUI?: HealthUI;
 
   private enemies: GroundEnemy[] = [];
+  private bloodEffects: BloodEffect[] = [];
 
   constructor() {
     // Create the PixiJS application
@@ -271,6 +273,16 @@ export class Game {
       if (body.y < 0) body.y = 0;
     }
 
+    // Update blood effects
+    this.bloodEffects = this.bloodEffects.filter((effect) => {
+      const isAlive = effect.update(deltaTime);
+      if (!isAlive) {
+        this.mainLayer.removeChild(effect.getSprite());
+        effect.destroy();
+      }
+      return isAlive;
+    });
+
     // КАМЕРА
     if (this.character && this.tilemap && !this.isDead) {
       const screenWidth = this.app.screen.width;
@@ -362,12 +374,35 @@ export class Game {
       }
 
       if (enemy.isDead()) {
+        // Spawn blood effect at enemy position
+        this.spawnBloodEffect(
+          enemyBody.x + enemyBody.width / 2,
+          enemyBody.y + enemyBody.height / 2,
+        );
+
         this.mainLayer.removeChild(enemy.getSprite());
         return false;
       }
 
       return true;
     });
+  }
+
+  private spawnBloodEffect(x: number, y: number): void {
+    // Load all 29 blood effect frames
+    const bloodFrames: PIXI.Texture[] = [];
+    for (let i = 0; i < 29; i++) {
+      const texture = this.assetManager.getTexture(`blood_frame_${i}`);
+      if (!texture) {
+        console.warn(`Blood effect frame ${i} not loaded`);
+        return;
+      }
+      bloodFrames.push(texture);
+    }
+
+    const bloodEffect = new BloodEffect(bloodFrames, x, y);
+    this.bloodEffects.push(bloodEffect);
+    this.mainLayer.addChild(bloodEffect.getSprite());
   }
 
   private async loadNextLevel(): Promise<void> {
@@ -394,6 +429,19 @@ export class Game {
       this.mainLayer.removeChild(this.levelEnd.sprite);
       this.levelEnd = undefined;
     }
+
+    // Clean up blood effects
+    this.bloodEffects.forEach((effect) => {
+      this.mainLayer.removeChild(effect.getSprite());
+      effect.destroy();
+    });
+    this.bloodEffects = [];
+
+    // Clean up enemies
+    this.enemies.forEach((enemy) => {
+      this.mainLayer.removeChild(enemy.getSprite());
+    });
+    this.enemies = [];
 
     // 2. Загружаем новый уровень
     await this.setupTilemap(this.currentLevel);

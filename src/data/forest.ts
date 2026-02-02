@@ -18,4 +18,9 @@ export const forest: Asset[] = [
   { name: 'kobold_idle', path: 'enemies/kobold/IDLE.png' },
   { name: 'kobold_run', path: 'enemies/kobold/RUN.png' },
   { name: 'kobold_attack', path: 'enemies/kobold/ATTACK.png' },
+  // Blood effect frames (29 frames: 1_0 to 1_28)
+  ...Array.from({ length: 29 }, (_, i) => ({
+    name: `blood_frame_${i}`,
+    path: `blood_effect/1_${i}.png`,
+  })),
 ];
